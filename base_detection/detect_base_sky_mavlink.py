@@ -1,29 +1,27 @@
 #!/usr/bin/env python3
 """
-Base identification mission using MAVLink directly (pymavlink), in the same
-spirit as SkyRats/sky_mavlink.
-
-NOTE: SkyRats/sky_mavlink is a private repository this session could not read
-(no access granted), so its exact class/method names could not be confirmed.
-This script talks MAVLink directly through `pymavlink.mavutil`, which is the
-library sky_mavlink itself wraps, and isolates every vehicle command inside
-the `MavlinkDrone` class below. If sky_mavlink exposes a higher-level API
-(e.g. a `Drone`/`Vehicle` class with `arm()`, `takeoff()`, `send_velocity()`),
-swap the body of `MavlinkDrone`'s methods for calls into that class -- the
-mission logic in `main()` does not need to change.
+Base identification mission using SkyRats/sky_mavlink (SkyMAVLink).
 
 The drone arms, takes off, flies forward at a constant body-frame velocity,
 and continuously runs a YOLO model (ultralytics, loaded from a `best.pt`
 checkpoint) on the live camera feed. As soon as the base is confirmed for a
-few consecutive frames, the drone stops, hovers, logs the detection and saves
-an annotated snapshot, then lands.
+few consecutive frames, the drone brakes, hovers, logs the detection and
+saves an annotated snapshot, then lands.
+
+SkyMAVLink has no background thread: its message loop only advances inside
+blocking calls (`sleep()`, `takeoff()`, `arm()`, ...), so the search loop
+below calls `drone.sleep(step)` on every iteration -- this both services the
+MAVLink link and keeps re-sending the active `set_body_velocity` setpoint.
+Camera capture + YOLO inference run on a separate Python thread, independent
+of the MAVLink link.
 
 Requirements:
-    pip install pymavlink opencv-python ultralytics
+    pip install -r requirements.txt
+    pip install -e /path/to/sky_mavlink   # SkyMAVLink itself (not on PyPI)
 
 Usage:
-    python detect_base_sky_mavlink.py --connection udp:127.0.0.1:14550 --model models/best.pt
-    python detect_base_sky_mavlink.py --connection /dev/ttyACM0 --model models/best.pt --classes base
+    python detect_base_sky_mavlink.py --connection tcp:127.0.0.1:5760 --model models/best.pt
+    python detect_base_sky_mavlink.py --connection serial:/dev/ttyACM0:115200 --model models/best.pt --classes base
 """
 
 import argparse
@@ -33,139 +31,10 @@ import time
 from typing import Optional, Set
 
 import cv2
-from pymavlink import mavutil
+from skymavlink import SkyMAVLink
 from ultralytics import YOLO
 
 log = logging.getLogger("base_detection_sky_mavlink")
-
-_M = mavutil.mavlink
-
-# type_mask for SET_POSITION_TARGET_LOCAL_NED: use velocity (vx,vy,vz) only,
-# ignore position, acceleration, and yaw/yaw-rate fields.
-_VELOCITY_ONLY_MASK = 0b0000111111000111
-
-
-class MavlinkDrone:
-    """Thin wrapper around a pymavlink connection for basic guided flight."""
-
-    def __init__(self, connection_string: str, baud: Optional[int] = None) -> None:
-        self.connection_string = connection_string
-        self.baud = baud
-        self.master: Optional[mavutil.mavfile] = None
-
-    def connect(self, heartbeat_timeout: float = 30.0) -> bool:
-        kwargs = {"baud": self.baud} if self.baud else {}
-        self.master = mavutil.mavlink_connection(self.connection_string, **kwargs)
-        log.info("Waiting for heartbeat on %s ...", self.connection_string)
-        msg = self.master.wait_heartbeat(timeout=heartbeat_timeout)
-        if msg is None:
-            log.error("No heartbeat received within %.0fs", heartbeat_timeout)
-            return False
-        log.info(
-            "Heartbeat received (system %d, component %d)",
-            self.master.target_system,
-            self.master.target_component,
-        )
-        return True
-
-    def set_mode(self, mode: str) -> bool:
-        mapping = self.master.mode_mapping() or {}
-        mode_id = mapping.get(mode)
-        if mode_id is None:
-            log.error("Unknown flight mode '%s'. Available: %s", mode, sorted(mapping))
-            return False
-        self.master.mav.set_mode_send(
-            self.master.target_system, _M.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, mode_id
-        )
-        return True
-
-    def arm(self, timeout: float = 10.0) -> bool:
-        self.master.mav.command_long_send(
-            self.master.target_system,
-            self.master.target_component,
-            _M.MAV_CMD_COMPONENT_ARM_DISARM,
-            0,
-            1, 0, 0, 0, 0, 0, 0,
-        )
-        try:
-            self.master.motors_armed_wait(timeout=timeout)
-        except TypeError:
-            # Older pymavlink versions don't accept a timeout kwarg here.
-            self.master.motors_armed_wait()
-        return bool(self.master.motors_armed())
-
-    def disarm(self) -> None:
-        self.master.mav.command_long_send(
-            self.master.target_system,
-            self.master.target_component,
-            _M.MAV_CMD_COMPONENT_ARM_DISARM,
-            0,
-            0, 0, 0, 0, 0, 0, 0,
-        )
-
-    def get_relative_altitude(self, timeout: float = 1.0) -> Optional[float]:
-        msg = self.master.recv_match(type="GLOBAL_POSITION_INT", blocking=True, timeout=timeout)
-        if msg is None:
-            return None
-        return msg.relative_alt / 1000.0
-
-    def takeoff(self, altitude: float, timeout: float = 30.0) -> bool:
-        if not self.set_mode("GUIDED"):
-            return False
-        if not self.arm():
-            log.error("Failed to arm")
-            return False
-
-        self.master.mav.command_long_send(
-            self.master.target_system,
-            self.master.target_component,
-            _M.MAV_CMD_NAV_TAKEOFF,
-            0,
-            0, 0, 0, 0, 0, 0, altitude,
-        )
-
-        start = time.time()
-        while time.time() - start < timeout:
-            alt = self.get_relative_altitude(timeout=1.0)
-            if alt is not None:
-                log.info("Altitude: %.2fm / %.2fm", alt, altitude)
-                if alt >= altitude * 0.95:
-                    return True
-        log.error("Timed out waiting to reach takeoff altitude")
-        return False
-
-    def send_velocity(self, vx: float, vy: float, vz: float = 0.0) -> None:
-        """Send one body-frame velocity setpoint (m/s, FRD: x=fwd, y=right, z=down)."""
-        self.master.mav.set_position_target_local_ned_send(
-            0,
-            self.master.target_system,
-            self.master.target_component,
-            _M.MAV_FRAME_BODY_OFFSET_NED,
-            _VELOCITY_ONLY_MASK,
-            0, 0, 0,
-            vx, vy, vz,
-            0, 0, 0,
-            0, 0,
-        )
-
-    def move_forward(self, speed: float, duration: float, rate_hz: float = 10.0) -> None:
-        """Fly forward at `speed` m/s for `duration` seconds, then stop."""
-        period = 1.0 / rate_hz
-        steps = max(1, int(duration / period))
-        for _ in range(steps):
-            self.send_velocity(speed, 0.0, 0.0)
-            time.sleep(period)
-        self.send_velocity(0.0, 0.0, 0.0)
-
-    def hover(self) -> None:
-        self.send_velocity(0.0, 0.0, 0.0)
-
-    def land(self) -> None:
-        self.set_mode("LAND")
-
-    def close(self) -> None:
-        if self.master is not None:
-            self.master.close()
 
 
 class Detector:
@@ -187,7 +56,10 @@ class Detector:
 
 
 class DetectionState:
-    """Shared, lock-protected view of the latest detector output."""
+    """Shared, lock-protected view of the latest detector output.
+
+    Written from the camera thread; read from the mission thread.
+    """
 
     def __init__(self) -> None:
         self.lock = threading.Lock()
@@ -250,9 +122,12 @@ def camera_loop(cap, detector: Detector, state: DetectionState, conf: float, tar
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="[%(name)s] %(message)s")
-    parser = argparse.ArgumentParser(description="Fly forward and identify the base (MAVLink)")
-    parser.add_argument("--connection", default="udp:127.0.0.1:14550", help="MAVLink connection string (udp:host:port, tcp:host:port, or a serial path).")
-    parser.add_argument("--baud", type=int, default=None, help="Baud rate for serial connections.")
+    parser = argparse.ArgumentParser(description="Fly forward and identify the base (SkyMAVLink)")
+    parser.add_argument(
+        "--connection",
+        default="tcp:127.0.0.1:5760",
+        help="pymavlink endpoint, e.g. tcp:127.0.0.1:5760 (SITL), udpout:HOST:PORT, or serial:/dev/ttyACM0:115200.",
+    )
     parser.add_argument("--camera-index", type=int, default=0, help="OpenCV camera device index.")
     parser.add_argument("--model", default="models/best.pt", help="Path to the YOLO best.pt weights.")
     parser.add_argument("--conf", type=float, default=0.5, help="Minimum detection confidence.")
@@ -263,9 +138,9 @@ def main() -> None:
         help="Class names that count as 'base'. Default: accept any detected class.",
     )
     parser.add_argument("--confirm-frames", type=int, default=3, help="Consecutive positive frames required to confirm.")
-    parser.add_argument("--height", type=float, default=2.0, help="Takeoff altitude (m).")
+    parser.add_argument("--height", type=float, default=1.5, help="Takeoff altitude (m).")
     parser.add_argument("--speed", type=float, default=0.3, help="Forward speed (m/s).")
-    parser.add_argument("--step-duration", type=float, default=0.5, help="Seconds flown forward per control step.")
+    parser.add_argument("--step", type=float, default=0.1, help="Seconds serviced per search-loop iteration.")
     parser.add_argument("--search-timeout", type=float, default=60.0, help="Max seconds spent searching before giving up.")
     parser.add_argument("--snapshot", default="base_detected.jpg", help="Where to save the annotated detection frame.")
     args = parser.parse_args()
@@ -289,17 +164,20 @@ def main() -> None:
     )
     cam_thread.start()
 
-    drone = MavlinkDrone(args.connection, baud=args.baud)
+    drone = SkyMAVLink(args.connection, takeoff_altitude=args.height)
     found = False
     try:
-        if not drone.connect():
-            log.error("Failed to connect to the vehicle")
-            return
-        if not drone.takeoff(args.height):
-            log.error("Takeoff failed")
-            return
+        drone.wait_for_connection()
+        drone.set_mode("GUIDED")
+        drone.arm()
+        drone.takeoff(args.height)
+
+        north, east, down = drone.wait_for_position()
+        log.info("Airborne at N=%.2f E=%.2f D=%.2f", north, east, down)
 
         log.info("Flying forward at %.2f m/s, searching for the base...", args.speed)
+        drone.set_body_velocity(args.speed, 0.0, 0.0)
+
         start = time.time()
         while time.time() - start < args.search_timeout:
             with state.lock:
@@ -307,21 +185,28 @@ def main() -> None:
             if hits >= args.confirm_frames:
                 found = True
                 break
-            drone.move_forward(args.speed, args.step_duration)
+            drone.sleep(args.step)  # services the link and re-sends the velocity setpoint
+
+        drone.set_body_velocity(0.0, 0.0, 0.0)  # brake
+        drone.sleep(2.0)
 
         if found:
-            drone.hover()
             report_detection(detector, state, target_classes, args.snapshot)
         else:
             log.warning("Base not identified within %.0fs; landing at current position.", args.search_timeout)
+    except TimeoutError as e:
+        log.error("Timeout during mission: %s", e)
+        drone.rtl()
     except KeyboardInterrupt:
-        log.info("Interrupted -- landing")
+        log.info("Interrupted -- returning to launch")
+        drone.rtl()
     finally:
-        drone.land()
+        if drone.is_armed():
+            drone.land()
         stop_event.set()
         cam_thread.join(timeout=2.0)
         cap.release()
-        drone.close()
+        drone.shutdown()
 
 
 if __name__ == "__main__":

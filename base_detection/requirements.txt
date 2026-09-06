@@ -2,7 +2,10 @@
 nectar-sdk
 
 # detect_base_sky_mavlink.py
+# SkyMAVLink itself is not on PyPI: clone SkyRats/sky_mavlink and run
+#   pip install -e /path/to/sky_mavlink
 pymavlink
+pyserial
 
 # shared by both scripts
 opencv-python
