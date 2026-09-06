@@ -1,0 +1,9 @@
+# detect_base_nectar.py
+nectar-sdk
+
+# detect_base_sky_mavlink.py
+pymavlink
+
+# shared by both scripts
+opencv-python
+ultralytics
