@@ -25,13 +25,21 @@ where image columns map to the drone's right and image rows map to the
 drone's forward (FRD body frame). Flip `--lateral-sign`/`--forward-sign` if
 your mount disagrees.
 
+Default connection assumes the flight controller is wired to the Raspberry
+Pi's UART pins (`/dev/serial0`, 921600 baud) rather than USB or SITL --
+override `--connection` for a different setup. On the Pi, `raspi-config`
+must have the serial port hardware enabled and its login shell disabled; on
+the FC, the corresponding `SERIALx_PROTOCOL` must be 2 (MAVLink2) and
+`SERIALx_BAUD` must match the baud in `--connection`.
+
 Requirements:
     pip install -r requirements.txt
     pip install -e /path/to/sky_mavlink   # SkyMAVLink itself (not on PyPI)
 
 Usage:
-    python detect_base_sky_mavlink.py --connection tcp:127.0.0.1:5760 --model models/best.pt
-    python detect_base_sky_mavlink.py --connection serial:/dev/ttyACM0:115200 --model models/best.pt --classes base
+    python detect_base_sky_mavlink.py --model models/best.pt
+    python detect_base_sky_mavlink.py --connection serial:/dev/ttyAMA0:57600 --model models/best.pt
+    python detect_base_sky_mavlink.py --connection tcp:127.0.0.1:5760 --model models/best.pt   # SITL
 """
 
 import argparse
@@ -228,8 +236,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Fly forward and identify the base (SkyMAVLink)")
     parser.add_argument(
         "--connection",
-        default="tcp:127.0.0.1:5760",
-        help="pymavlink endpoint, e.g. tcp:127.0.0.1:5760 (SITL), udpout:HOST:PORT, or serial:/dev/ttyACM0:115200.",
+        default="serial:/dev/serial0:921600",
+        help="SkyMAVLink endpoint. Default assumes the FC is on the Pi's UART pins. "
+        "Also accepts tcp:127.0.0.1:5760 (SITL) or udpout:HOST:PORT (behind a router).",
     )
     parser.add_argument("--camera-index", type=int, default=0, help="OpenCV camera device index.")
     parser.add_argument("--model", default="models/best.pt", help="Path to the YOLO best.pt weights.")

@@ -8,6 +8,18 @@ lands on top of it.
 
 Put your trained weights at `models/best.pt` (or pass `--model <path>`).
 
+Both scripts default to talking to the flight controller over the Raspberry
+Pi's **UART** pins (`/dev/serial0` @ 921600 baud), not USB or SITL. Before
+running: enable the Pi's serial port hardware and disable its login shell
+via `raspi-config` (Interface Options -> Serial Port), and on the FC set the
+matching `SERIALx_PROTOCOL=2` (MAVLink2) and `SERIALx_BAUD` for whichever
+port is wired to the Pi. `/dev/serial0` is a symlink to the Pi's primary
+UART (`ttyAMA0` or `ttyS0` depending on model/config) -- pass
+`--connection`/`--baud` (nectar) or `--connection` (sky_mavlink, baud is
+embedded in the endpoint string) to point at a different device or, for
+bench testing without hardware, back at SITL (`tcp:127.0.0.1:5760` /
+`--drone mavlink --connection tcp:127.0.0.1:5762`).
+
 Camera mounting assumption for the centering phase (both scripts): a
 forward/nadir camera where image columns map to the drone's right and image
 rows map to the drone's forward direction. If your camera is mounted
@@ -30,7 +42,9 @@ off to `drone.land()` once low enough.
 ```bash
 pip install nectar-sdk opencv-python ultralytics
 
-python detect_base_nectar.py --model models/best.pt --drone mavlink
+python detect_base_nectar.py --model models/best.pt                              # UART, /dev/serial0 @ 921600
+python detect_base_nectar.py --model models/best.pt --connection /dev/ttyAMA0 --baud 57600
+python detect_base_nectar.py --model models/best.pt --drone mavlink --connection tcp:127.0.0.1:5762  # SITL
 python detect_base_nectar.py --model models/best.pt --drone mavros --env indoor
 python detect_base_nectar.py --model models/best.pt --classes base --conf 0.6
 ```
@@ -49,12 +63,13 @@ MAVLink side, not vision).
 pip install -r requirements.txt
 pip install -e /path/to/sky_mavlink   # SkyMAVLink itself (not on PyPI)
 
-python detect_base_sky_mavlink.py --connection tcp:127.0.0.1:5760 --model models/best.pt
-python detect_base_sky_mavlink.py --connection serial:/dev/ttyACM0:115200 --model models/best.pt --classes base
+python detect_base_sky_mavlink.py --model models/best.pt                                     # UART, /dev/serial0 @ 921600
+python detect_base_sky_mavlink.py --connection serial:/dev/ttyAMA0:57600 --model models/best.pt
+python detect_base_sky_mavlink.py --connection tcp:127.0.0.1:5760 --model models/best.pt      # SITL
 ```
 
-`--connection` takes any SkyMAVLink/pymavlink endpoint: `tcp:host:port` (SITL),
-`udpout:host:port` (behind a router), or `serial:/dev/tty...:baud`.
+`--connection` takes any SkyMAVLink/pymavlink endpoint: `serial:/dev/tty...:baud`
+(UART/USB), `tcp:host:port` (SITL), or `udpout:host:port` (behind a router).
 
 **Centering**: SkyMAVLink ships no PID utility, so a small PID is rolled in
 the script and wired to the exact continuous-correction primitive its README
@@ -67,6 +82,7 @@ enough.
 
 | Flag | Meaning |
 |---|---|
+| `--connection` | Flight controller link (default `/dev/serial0` UART, sky_mavlink writes it as `serial:/dev/serial0:921600`) |
 | `--model` | Path to the YOLO `best.pt` weights (default `models/best.pt`) |
 | `--conf` | Minimum detection confidence (default `0.5`) |
 | `--classes` | Class names counted as "base"; omit to accept any class |
@@ -77,10 +93,13 @@ enough.
 | `--snapshot` | Where to save the annotated detection frame (default `base_detected.jpg`) |
 
 `detect_base_nectar.py` also takes `--step-duration` (seconds flown forward
-per `move_velocity` call); `detect_base_sky_mavlink.py` takes `--step`
-(seconds serviced per search-loop iteration via `drone.sleep()`) instead,
+per `move_velocity` call) and `--baud` (default `921600`, separate from
+`--connection` since Nectar's mavlink/px4_mavlink backends take baud as its
+own field); `detect_base_sky_mavlink.py` takes `--step` (seconds serviced per
+search-loop iteration via `drone.sleep()`) instead of `--step-duration`,
 since SkyMAVLink re-sends the velocity setpoint continuously rather than
-per-call.
+per-call, and has no separate `--baud` since SkyMAVLink endpoints embed it
+(`serial:/dev/serial0:921600`).
 
 ### Centering / landing options (both scripts)
 

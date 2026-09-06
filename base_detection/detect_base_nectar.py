@@ -17,11 +17,19 @@ where image columns map to the drone's right (body Y) and image rows map to
 the drone's forward (body X). Flip `--lateral-sign`/`--forward-sign` if your
 mount disagrees.
 
+Default connection assumes the flight controller is wired to the Raspberry
+Pi's UART pins (`/dev/serial0`, 921600 baud) rather than USB -- override with
+`--connection`/`--baud` for a different setup. On the Pi, `raspi-config`
+must have the serial port hardware enabled and its login shell disabled; on
+the FC, the corresponding `SERIALx_PROTOCOL` must be 2 (MAVLink2) and
+`SERIALx_BAUD` must match `--baud`.
+
 Requirements:
     pip install nectar-sdk opencv-python ultralytics
 
 Usage:
     python detect_base_nectar.py --model models/best.pt --drone mavlink
+    python detect_base_nectar.py --model models/best.pt --connection /dev/ttyAMA0 --baud 57600
     python detect_base_nectar.py --model models/best.pt --drone mavros --env indoor
     python detect_base_nectar.py --model models/best.pt --camera-type ros --classes base
 """
@@ -76,8 +84,20 @@ class DetectionState:
 def build_drone_config(args: argparse.Namespace):
     pose_source = PoseSource.VISION if args.env == "indoor" else PoseSource.GPS
     kwargs = {"pose_source": pose_source, "start_driver": False}
-    if args.connection:
-        kwargs["connection_string"] = args.connection
+
+    if args.drone in ("mavros", "px4"):
+        # MAVROS embeds the baud rate in the connection URL itself.
+        if args.connection:
+            connection_string = args.connection
+            if connection_string.startswith("/dev/"):
+                connection_string = f"serial://{connection_string}:{args.baud}"
+            kwargs["connection_string"] = connection_string
+    else:
+        # Direct-pymavlink backends (mavlink/px4_mavlink) take a bare device
+        # path plus a separate baud field.
+        if args.connection:
+            kwargs["connection_string"] = args.connection
+        kwargs["baud"] = args.baud
 
     if args.drone == "mavros":
         return MavrosConfig(**kwargs)
@@ -204,7 +224,12 @@ def main() -> None:
         help="Nectar drone backend to use.",
     )
     parser.add_argument("--env", choices=["outdoor", "indoor"], default="outdoor")
-    parser.add_argument("--connection", default=None, help="Connection string override (mavlink) or fcu_url (mavros).")
+    parser.add_argument(
+        "--connection",
+        default="/dev/serial0",
+        help="Serial device (mavlink/px4_mavlink) or fcu_url (mavros/px4). Default assumes the FC is on the Pi's UART pins.",
+    )
+    parser.add_argument("--baud", type=int, default=921600, help="Baud rate; must match the FC's SERIALx_BAUD for this port.")
     parser.add_argument("--camera-type", default="webcam", help="webcam | imx219 | ros | <video file path> | <ROS topic>")
     parser.add_argument("--model", default="models/best.pt", help="Path to the YOLO best.pt weights.")
     parser.add_argument("--conf", type=float, default=0.5, help="Minimum detection confidence.")
