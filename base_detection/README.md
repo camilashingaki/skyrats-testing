@@ -6,7 +6,14 @@ a few consecutive frames it switches to a centering phase that visually
 servos the base into the middle of the frame, descends while centered, and
 lands on top of it.
 
-Put your trained weights at `models/best.pt` (or pass `--model <path>`).
+Put your trained weights at `models/best.pt` (or pass `--model <path>`). Both
+`Detector` classes load the model through `ultralytics.YOLO`, which
+auto-detects the format from the path, so `--model` also accepts the
+NCNN/TFLite exports committed under `models/` (`best_ncnn_model/`,
+`best_w8a32.tflite`) -- faster on a Raspberry Pi's ARM CPU than plain
+PyTorch, especially on a Pi 4. See `model_export/README.md` for how they were
+produced, the size/dependency tradeoffs, and how to re-export after
+retraining.
 
 Both scripts default to talking to the flight controller over the Raspberry
 Pi's **UART** pins (`/dev/serial0` @ 921600 baud), not USB or SITL. Before

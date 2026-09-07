@@ -1,0 +1,25 @@
+description: Ultralytics YOLO26n model trained on data.yaml
+author: Ultralytics
+date: '2026-09-07T13:31:32.914880+00:00'
+version: 8.4.142
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: detect
+head: Detect
+batch: 1
+imgsz:
+- 640
+- 640
+names:
+  0: shape_hexagon
+  1: shape_star
+  2: shape_triangle
+  3: number_3
+  4: number_4
+  5: number_5
+args:
+  batch: 1
+  quantize: 16
+channels: 3
+end2end: false

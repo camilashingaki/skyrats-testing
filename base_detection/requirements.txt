@@ -10,3 +10,9 @@ pyserial
 # shared by both scripts
 opencv-python
 ultralytics
+
+# Only needed if --model points at that backend's exported format (see
+# model_export/README.md); uncomment whichever you deploy. Skip both to keep
+# running the default models/best.pt (plain PyTorch).
+# ncnn                # for models/best_ncnn_model
+# ai-edge-litert       # for models/best_w8a32.tflite (or any other .tflite)
