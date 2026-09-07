@@ -19,11 +19,21 @@ they replace that backbone compute with NEON-accelerated kernels, which is
 where the real FPS win on a Raspberry Pi comes from -- more so on a Pi 4
 (Cortex-A72, no fp16 dot-product acceleration) than a Pi 5 (Cortex-A76).
 
-| | Model size (this checkpoint, 2.5M params) | Runtime dependency on the Pi |
+| | Model size (this checkpoint, 2.5M params, exported at imgsz=1280) | Runtime dependency on the Pi |
 |---|---|---|
-| `best.pt` (FP16) | 5.4 MB | full `torch` + `ultralytics` |
-| `best_ncnn_model/` (FP16) | 4.7 MB | `ncnn` + `ultralytics` (still imports torch for pre/post-processing) |
-| `best_w8a32.tflite` (dynamic INT8) | 2.7 MB | `ai-edge-litert` + `ultralytics` (still imports torch) |
+| `best.pt` (FP16) | 5.2 MB | full `torch` + `ultralytics` |
+| `best_ncnn_model/` (FP16) | 5.0 MB | `ncnn` + `ultralytics` (still imports torch for pre/post-processing) |
+| `best_w8a32.tflite` (dynamic INT8) | 3.0 MB | `ai-edge-litert` + `ultralytics` (still imports torch) |
+
+Exported at **imgsz=1280**, not YOLO's usual 640: these are drone photos
+(4032x3024) with a small marker far below, so at 640 most of it disappears in
+the downscale before the model ever sees it. Confirmed against real photos --
+several that scored near-zero confidence at 640 scored 0.6-0.9+ at 1280 with
+the exact same weights, no retraining (see `raw_detector.py`'s docstring).
+1280 costs roughly 4x the compute of 640 per frame (compute scales with
+width x height) -- worth benchmarking FPS on the actual Pi before assuming
+it's still fast enough; 960 is a cheaper middle ground if 1280 turns out too
+slow.
 
 Note both exported backends still go through `ultralytics.YOLO`, so `torch`
 stays a dependency either way (it's used for the NMS/pre-post-processing
@@ -69,8 +79,8 @@ Numbers above are model/file size, not FPS -- that depends on the specific
 Pi, thermal throttling, and camera resolution. Once deployed, measure with:
 
 ```bash
-yolo benchmark model=models/best.pt imgsz=640 format=ncnn
-yolo benchmark model=models/best.pt imgsz=640 format=tflite
+yolo benchmark model=models/best.pt imgsz=1280 format=ncnn
+yolo benchmark model=models/best.pt imgsz=1280 format=tflite
 ```
 
 `yolo benchmark` takes the source `best.pt` and re-exports it to the given

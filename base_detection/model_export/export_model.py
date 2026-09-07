@@ -65,7 +65,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--weights", default="../models/best.pt", help="Path to the trained best.pt checkpoint.")
     parser.add_argument("--formats", nargs="+", choices=["ncnn", "tflite"], default=["ncnn", "tflite"])
-    parser.add_argument("--imgsz", type=int, default=640, help="Export input resolution (must match training imgsz).")
+    parser.add_argument(
+        "--imgsz",
+        type=int,
+        default=1280,
+        help="Export input resolution (must match raw_detector.py's IMG_SIZE). Default is 1280, not YOLO's usual "
+        "640: these are drone photos with a small marker far below, and 640 downscales it into near-invisibility "
+        "-- see raw_detector.py's docstring for the confidence numbers that justify this.",
+    )
     parser.add_argument(
         "--ncnn-quantize",
         type=int,

@@ -1,15 +1,25 @@
 """YOLO inference for the base-detection model without torch/ultralytics.
 
 Only works with models exported by model_export/export_model.py (NCNN or
-TFLite). It relies on a fact verified against this exact checkpoint (see
-model_export/README.md): the exported graph already bakes in the anchor/
-stride box decode and the class-score sigmoid, so no DFL/anchor-decode math
-needs to be reimplemented here -- the raw output is already
-(4 box coords + N class scores) x 8400 anchors, boxes already in pixel space
-relative to the padded 640x640 input, as (center_x, center_y, width, height)
--- verified by comparing against ultralytics.YOLO(...).predict() on the same
-exported graph; this checkpoint's metadata reports end2end=false, which
-selects xywh in ultralytics' own decode_bboxes(), not xyxy.
+TFLite), at the same IMG_SIZE they were exported with -- the exported graphs
+have a fixed input shape baked in, no dynamic resizing. It relies on a fact
+verified against this exact checkpoint (see model_export/README.md): the
+exported graph already bakes in the anchor/stride box decode and the
+class-score sigmoid, so no DFL/anchor-decode math needs to be reimplemented
+here -- the raw output is already (4 box coords + N class scores) x
+(IMG_SIZE/32)^2 * 21/16 anchors (8400 at 640, 33600 at 1280), boxes already
+in pixel space relative to the padded IMG_SIZE x IMG_SIZE input, as
+(center_x, center_y, width, height) -- verified by comparing against
+ultralytics.YOLO(...).predict() on the same exported graph; this checkpoint's
+metadata reports end2end=false, which selects xywh in ultralytics' own
+decode_bboxes(), not xyxy.
+
+IMG_SIZE is 1280, not the usual YOLO default of 640: these are drone photos
+(4032x3024) with a small marker far below, so at 640 most of it disappears
+in the downscale -- confirmed empirically, several real photos that scored
+near-zero confidence at 640 scored 0.6-0.9+ at 1280 with the exact same
+weights, no retraining. Re-exporting at a different IMG_SIZE means updating
+both this constant and re-running export_model.py --imgsz <N>.
 
 Only the shape classes (hexagon/star/triangle) are matched by default: a
 base is a single shape with a number printed inside it, so a real base
@@ -29,7 +39,7 @@ import numpy as np
 CLASS_NAMES = ["shape_hexagon", "shape_star", "shape_triangle", "number_3", "number_4", "number_5"]
 SHAPE_CLASS_INDICES = (0, 1, 2)
 
-IMG_SIZE = 640
+IMG_SIZE = 1280
 PAD_VALUE = 114
 
 
@@ -78,7 +88,7 @@ class _TFLiteBackend:
     def run(self, padded_bgr: np.ndarray) -> np.ndarray:
         rgb = cv2.cvtColor(padded_bgr, cv2.COLOR_BGR2RGB)
         chw = rgb.transpose(2, 0, 1).astype(np.float32) / 255.0
-        input_tensor = np.ascontiguousarray(chw[None])  # (1, 3, 640, 640)
+        input_tensor = np.ascontiguousarray(chw[None])  # (1, 3, IMG_SIZE, IMG_SIZE)
 
         self.interpreter.set_tensor(self._input_index, input_tensor)
         self.interpreter.invoke()
