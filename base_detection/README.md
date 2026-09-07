@@ -15,6 +15,18 @@ PyTorch, especially on a Pi 4. See `model_export/README.md` for how they were
 produced, the size/dependency tradeoffs, and how to re-export after
 retraining.
 
+`raw_detector.py` is a second, torch-free `Detector` implementation for the
+same NCNN/TFLite exports (`ncnn`/`ai-edge-litert` only, no `ultralytics`/
+`torch` import at all -- see model_export/README.md for the RAM numbers this
+actually saves). It only matches the shape classes (`shape_hexagon`,
+`shape_star`, `shape_triangle`), ignoring the number classes on purpose: a
+base is one shape with a number printed inside it, so both fire on the same
+object, and counting both would read one base as two. It returns a centroid
+instead of a box, since that's the only thing `center_and_land()` ever reads
+from a detection. Not wired into `detect_base_*.py` yet -- test it first with
+`test_raw_detector.py` (see `teste_imagens/README.md`), then swap the
+`Detector` import in whichever mission script if it holds up.
+
 Both scripts default to talking to the flight controller over the Raspberry
 Pi's **UART** pins (`/dev/serial0` @ 921600 baud), not USB or SITL. Before
 running: enable the Pi's serial port hardware and disable its login shell
