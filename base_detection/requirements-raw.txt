@@ -1,0 +1,13 @@
+# Deps for raw_detector.py / test_raw_detector.py -- the torch-free path.
+# Deliberately does NOT include ultralytics: it pulls in torch as a
+# transitive dependency, which is exactly what raw_detector.py exists to
+# avoid (see model_export/README.md for the measured RAM difference).
+#
+# Install only the backend(s) you actually deploy -- both work, ncnn is the
+# lighter/faster one on ARM.
+
+opencv-python
+numpy
+
+ncnn                 # for models/best_ncnn_model
+ai-edge-litert       # for models/best_w8a32.tflite (or any other .tflite)
