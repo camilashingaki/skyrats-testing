@@ -9,8 +9,9 @@ python test_raw_detector.py --model models/best_ncnn_model
 python test_raw_detector.py --model models/best_w8a32.tflite
 ```
 
-Requer só `opencv-python`, `numpy` e (`ncnn` ou `ai-edge-litert`, conforme o
-`--model` escolhido) -- não precisa de torch/ultralytics pra rodar isso.
+Requer só `../requirements-raw.txt` (`opencv-python`, `numpy`, `ncnn`,
+`ai-edge-litert`) -- não precisa de torch/ultralytics pra rodar isso. Veja
+`../README.md` (seção Setup) pra criar o venv correto.
 
 Pra cada imagem em `teste_imagens/`, o script:
 - roda `RawDetector` (`../raw_detector.py`) e imprime classe + confiança + centroide,

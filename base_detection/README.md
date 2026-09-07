@@ -27,6 +27,28 @@ from a detection. Not wired into `detect_base_*.py` yet -- test it first with
 `test_raw_detector.py` (see `teste_imagens/README.md`), then swap the
 `Detector` import in whichever mission script if it holds up.
 
+## Setup
+
+Two separate dependency sets, in two separate venvs -- `requirements.txt`
+pulls in `ultralytics`, and `ultralytics` pulls in `torch` whether or not you
+actually use it, so keep it out of the venv you use to test the torch-free
+path:
+
+```bash
+# Mission scripts (detect_base_*.py) -- needs ultralytics, so needs torch too
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+
+# raw_detector.py / test_raw_detector.py -- torch-free path
+python3 -m venv .venv-raw
+.venv-raw/bin/pip install -r requirements-raw.txt
+.venv-raw/bin/python -c "import torch"  # confirm: ModuleNotFoundError, as expected
+.venv-raw/bin/python test_raw_detector.py --model models/best_ncnn_model
+```
+
+Both `.venv*` dirs are gitignored -- recreate them wherever you deploy
+(dev machine or Pi), don't commit them.
+
 Both scripts default to talking to the flight controller over the Raspberry
 Pi's **UART** pins (`/dev/serial0` @ 921600 baud), not USB or SITL. Before
 running: enable the Pi's serial port hardware and disable its login shell
