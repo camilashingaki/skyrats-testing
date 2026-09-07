@@ -1,0 +1,18 @@
+# Deps for model_export/export_model.py -- run this on a dev machine, NOT on
+# the Raspberry Pi. Ultralytics auto-installs most of these on first export
+# anyway; pinned here for a reproducible dev-machine setup.
+#
+# Do not install this file on the Pi: it drags in full PyTorch + TensorFlow,
+# defeating the point of exporting to a lightweight runtime. The Pi only
+# needs requirements.txt plus the runtime line for the backend you deploy.
+
+ultralytics
+torch
+
+# NCNN export (PNNX conversion)
+ncnn
+pnnx==20260526
+
+# TFLite / LiteRT export
+litert-torch>=0.9.0
+ai-edge-litert>=2.1.4
