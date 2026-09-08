@@ -12,8 +12,8 @@ navigation always sends an explicit zero yaw-rate when yaw is None (see
 nectar/control/mavlink/transport.py's _VELOCITY_MASK, which never flags
 yaw-rate "ignore" the way it does yaw), so the drone doesn't turn to face
 the target the way ArduPilot's default WP_YAW_BEHAVIOR would without it --
-the same concern skymavlink/CLAUDE.md documents for SkyMAVLink's own
-set_body_velocity().
+the same concern the SkyMAVLink library's own rules doc (CLAUDE.md)
+documents for SkyMAVLink's own set_body_velocity().
 
 Usage:
     python andar_frente_nectar.py

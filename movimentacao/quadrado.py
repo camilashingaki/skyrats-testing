@@ -6,9 +6,10 @@ Heading is locked to whatever it was at takeoff for the entire mission: every
 leg is a set_body_pose() call with an explicit yaw_deg, so the drone strafes
 around the square nose-first-fixed instead of yawing to face each new
 waypoint (ArduPilot's default WP_YAW_BEHAVIOR would otherwise turn the nose
-toward the direction of travel on every leg -- see skymavlink/CLAUDE.md,
-"Never flag yaw_rate ignore on a velocity setpoint" -- the same effect shows
-up on unyawed position targets, not just velocity ones).
+toward the direction of travel on every leg -- see the SkyMAVLink library's
+own rules doc (CLAUDE.md), "Never flag yaw_rate ignore on a velocity
+setpoint" -- the same effect shows up on unyawed position targets, not just
+velocity ones).
 
 Usage:
     python quadrado.py                          # SITL, tcp:127.0.0.1:5760, 2 m side

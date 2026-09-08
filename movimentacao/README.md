@@ -1,9 +1,9 @@
 # movimentacao
 
-Basic flight scripts, in two backends: `skymavlink.SkyMAVLink` (see
-`../skymavlink/`) and the Nectar SDK (`Black-Bee-Drones/nectar-sdk`). Each
-one is a standalone smoke test -- run them in order when bringing up a new
-vehicle/link.
+Basic flight scripts, in two backends: `skymavlink.SkyMAVLink`
+(`SkyRats/sky_mavlink`, cloned separately -- see Setup below) and the
+Nectar SDK (`Black-Bee-Drones/nectar-sdk`). Each one is a standalone smoke
+test -- run them in order when bringing up a new vehicle/link.
 
 | Mission | SkyMAVLink | Nectar |
 |---|---|---|
@@ -23,8 +23,9 @@ between them.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r ../skymavlink/requirements.txt
-pip install -e ../skymavlink
+pip install pymavlink pyserial
+git clone https://github.com/SkyRats/sky_mavlink.git ../sky_mavlink   # or wherever you keep it
+pip install -e ../sky_mavlink   # SkyMAVLink itself (not on PyPI)
 ```
 
 **Nectar** -- `nectar-sdk` is a ROS 2 package (Humble/Jazzy/Kilted), not

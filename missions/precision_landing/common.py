@@ -12,9 +12,11 @@ Builds on:
     landing phase is reused close to unchanged from there (same PID,
     same set_body_velocity-driven visual servo, same land-altitude
     handoff); what's new here is a locked-heading search **square**
-    instead of a single straight forward leg, per skymavlink/CLAUDE.md's
-    "yaw fixed" rule for body-frame patterns.
+    instead of a single straight forward leg, per the SkyMAVLink library's
+    own rules doc (CLAUDE.md) "yaw fixed" rule for body-frame patterns.
   - skymavlink -- flight control (arm/takeoff/set_body_velocity/land).
+    Cloned separately (not vendored in this repo) and installed with
+    `pip install -e /path/to/sky_mavlink` -- see this folder's README.
 """
 
 import argparse
@@ -175,9 +177,10 @@ def search_square(drone: SkyMAVLink, state: DetectionState, args: argparse.Names
     would have to be re-issued to react once a detection lands mid-leg, a
     velocity setpoint just gets overwritten with zero. Heading stays locked
     the whole time because set_body_velocity() always sends an explicit
-    yaw_rate (0 here) -- see skymavlink/CLAUDE.md, "Never flag yaw_rate
-    ignore on a velocity setpoint" -- so the search never turns to face a
-    corner the way ArduPilot's default WP_YAW_BEHAVIOR otherwise would.
+    yaw_rate (0 here) -- see the SkyMAVLink library's own rules doc
+    (CLAUDE.md), "Never flag yaw_rate ignore on a velocity setpoint" -- so
+    the search never turns to face a corner the way ArduPilot's default
+    WP_YAW_BEHAVIOR otherwise would.
 
     Distance per leg is measured from get_pose_local(), never from
     speed * time, so wind/battery sag can't silently shrink or grow the

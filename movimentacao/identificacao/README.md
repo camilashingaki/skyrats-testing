@@ -21,8 +21,9 @@ Two backends, same mission:
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-pip install -r ../../skymavlink/requirements.txt
-pip install -e ../../skymavlink
+pip install pymavlink pyserial
+git clone https://github.com/SkyRats/sky_mavlink.git ../../sky_mavlink   # or wherever you keep it
+pip install -e ../../sky_mavlink   # SkyMAVLink itself (not on PyPI)
 ```
 
 **Nectar** -- `nectar-sdk` is a ROS 2 package, not pip-installable into an
