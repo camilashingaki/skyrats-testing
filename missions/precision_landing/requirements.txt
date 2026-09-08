@@ -1,0 +1,8 @@
+# Torch-free stack, same as base_detection/requirements-raw.txt -- reuses
+# base_detection/raw_detector.py directly. Install only the backend(s) you
+# actually run.
+opencv-python
+numpy
+
+ncnn                 # precision_landing_ncnn.py
+ai-edge-litert       # precision_landing_tflite.py
