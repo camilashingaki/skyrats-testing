@@ -1,0 +1,17 @@
+# nectar-sdk is a ROS 2 package (Humble/Jazzy/Kilted), not a plain pip
+# library -- rclpy and friends aren't installable into an ordinary venv.
+# Set it up with the SDK's own installer, THEN activate that environment
+# before running the *_nectar.py scripts in this folder:
+#
+#   bash <(curl -fsSL https://raw.githubusercontent.com/Black-Bee-Drones/nectar-sdk/main/scripts/bootstrap.sh)
+#
+# (fresh machine, no ROS 2 yet) or, with ROS 2 already installed:
+#
+#   cd ~/ros2_ws/src && git clone https://github.com/Black-Bee-Drones/nectar-sdk.git
+#   cd nectar-sdk && make setup
+#
+# See https://black-bee-drones.github.io/nectar-sdk/setup/ for the full guide
+# (including a Docker path that needs no host ROS 2 install at all).
+#
+# Nothing else to pip install for the scripts in this folder -- they only
+# import nectar.control.

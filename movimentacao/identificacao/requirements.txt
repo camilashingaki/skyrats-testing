@@ -1,0 +1,7 @@
+# Same torch-free stack as base_detection/requirements-raw.txt -- this
+# script reuses base_detection/raw_detector.py directly.
+opencv-python
+numpy
+
+ncnn                 # for the default NCNN model
+ai-edge-litert       # only if you pass --model pointing at a .tflite file
