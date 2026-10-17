@@ -1,3 +1,7 @@
 __pycache__/
 *.pyc
 .venv*/
+
+# clones locais de referência — repos próprios, não fazem parte deste
+testing_skymavlink/nectar-sdk/
+testing_skymavlink/sky_mavlink/
